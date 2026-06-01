@@ -35,7 +35,6 @@ jobs:
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
 
-          echo "android.aapt2FromMavenOverride=\$ANDROID_HOME/build-tools/35.0.0/aapt2" >> android/gradle.properties
 
           echo "===== SETTINGS.GRADLE ====="
           cat android/settings.gradle
