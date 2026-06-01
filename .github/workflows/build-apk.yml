@@ -26,14 +26,14 @@ jobs:
       - name: Create Android files
         run: flutter create --platforms=android --project-name manabe_masaref .
 
-      - name: Fix Android SDK and Build Tools
+      - name: Fix Android SDK and AAPT2
         run: |
           SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -n 1)
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platforms;android-33" "platforms;android-35" "build-tools;33.0.0" "build-tools;35.0.0"
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle
-          sed -i '/android {/a\    buildToolsVersion = "35.0.0"' android/app/build.gradle
+          echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" >> android/gradle.properties
 
       - name: Get dependencies
         run: flutter pub get
