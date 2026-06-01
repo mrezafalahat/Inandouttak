@@ -26,14 +26,28 @@ jobs:
       - name: Create Android files
         run: flutter create --platforms=android --project-name manabe_masaref .
 
-      - name: Fix Android SDK and AAPT2
+      - name: Patch Android and Kotlin
         run: |
-          SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -n 1)
-          yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" "platforms;android-33" "platforms;android-35" "build-tools;33.0.0" "build-tools;35.0.0"
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle
-          echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" >> android/gradle.properties
+          sed -i 's/version "1.7.10"/version "1.9.24"/g' android/settings.gradle || true
+          sed -i "s/version '1.7.10'/version '1.9.24'/g" android/settings.gradle || true
+          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle || true
+
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
+
+          echo "android.aapt2FromMavenOverride=\$ANDROID_HOME/build-tools/35.0.0/aapt2" >> android/gradle.properties
+
+          echo "===== SETTINGS.GRADLE ====="
+          cat android/settings.gradle
+
+          echo "===== APP BUILD.GRADLE ====="
+          cat android/app/build.gradle
+
+      - name: Verify Kotlin Version
+        run: |
+          echo "===== KOTLIN ====="
+          grep -R "org.jetbrains.kotlin.android" android || true
+          grep -R "1.9.24" android || true
 
       - name: Get dependencies
         run: flutter pub get
