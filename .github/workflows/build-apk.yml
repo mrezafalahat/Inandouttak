@@ -17,10 +17,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: "3.24.0"
 
       - name: Create Android Project Files
-        run: flutter create --platforms=android .
+        run: flutter create --platforms=android --project-name inandouttak .
 
       - name: Install Dependencies
         run: flutter pub get
