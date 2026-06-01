@@ -1,8 +1,6 @@
 name: Build APK
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -17,12 +15,12 @@ jobs:
           flutter-version: '3.24.5'
 
       - name: Create Flutter project files
-        run: flutter create .
+        run: flutter create --project-name inandouttak .
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build debug APK
+      - name: Build APK
         run: flutter build apk --debug
 
       - name: Upload APK

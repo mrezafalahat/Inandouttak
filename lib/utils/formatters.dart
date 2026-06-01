@@ -1,28 +1,31 @@
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 
 String formatMoney(int value) {
-  final formatter = NumberFormat.decimalPattern('en_US');
-  return formatter.format(value);
+  return NumberFormat.decimalPattern('en_US').format(value);
+}
+
+class ThousandsSeparatorInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue(text: '');
+
+    final formatted =
+        NumberFormat.decimalPattern('en_US').format(int.parse(digits));
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
 
 String todayJalali() {
   final j = Jalali.now();
   return '${j.year}/${j.month.toString().padLeft(2, '0')}/${j.day.toString().padLeft(2, '0')}';
-}
-
-String jalaliToGregorianIso(String jalaliDate) {
-  final clean = jalaliDate.replaceAll('-', '/');
-  final parts = clean.split('/');
-  if (parts.length != 3) return DateTime.now().toIso8601String().substring(0, 10);
-
-  final jy = int.parse(parts[0]);
-  final jm = int.parse(parts[1]);
-  final jd = int.parse(parts[2]);
-  final g = Jalali(jy, jm, jd).toGregorian();
-  return '${g.year.toString().padLeft(4, '0')}-${g.month.toString().padLeft(2, '0')}-${g.day.toString().padLeft(2, '0')}';
-}
-
-String normalizeText(String value) {
-  return value.trim().replaceAll(RegExp(r'\s+'), ' ');
 }
