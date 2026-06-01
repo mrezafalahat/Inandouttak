@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import '../models/financial_item.dart';
+import '../models/bank_balance.dart';
+import '../models/cash_item.dart';
 
 class DatabaseService {
   DatabaseService._();
@@ -14,140 +15,111 @@ class DatabaseService {
     return _db!;
   }
 
-  Future<void> _create(Database database, int version) async {
-    await database.execute('''
-      CREATE TABLE financial_items(
+  Future<void> _create(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE cash_items(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        document_date TEXT NOT NULL,
-        cash_effect_date TEXT NOT NULL,
-        document_number TEXT NOT NULL,
-        description TEXT NOT NULL,
-        amount REAL NOT NULL,
-        kind TEXT NOT NULL,
-        source_type TEXT NOT NULL,
-        source_name TEXT NOT NULL,
-        status TEXT NOT NULL,
-        include_in_forecast INTEGER NOT NULL DEFAULT 1,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        unique_key TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        stable_key TEXT UNIQUE,
+        date TEXT,
+        effect_date TEXT,
+        doc_no TEXT,
+        description TEXT,
+        amount INTEGER,
+        item_type TEXT,
+        source_type TEXT,
+        source_name TEXT,
+        status TEXT,
+        include_in_forecast INTEGER DEFAULT 1,
+        active INTEGER DEFAULT 1
       )
     ''');
-    await database.execute('''
+    await db.execute('CREATE INDEX idx_cash_effect_date ON cash_items(effect_date)');
+    await db.execute('CREATE INDEX idx_cash_key ON cash_items(stable_key)');
+
+    await db.execute('''
       CREATE TABLE bank_balances(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        bank_name TEXT NOT NULL UNIQUE,
-        amount REAL NOT NULL,
-        balance_date TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        bank_name TEXT,
+        amount INTEGER,
+        date TEXT
       )
     ''');
   }
 
-  Future<void> upsertBankBalance(BankBalance balance) async {
+  Future<List<CashItem>> getItems() async {
     final database = await db;
-    await database.insert('bank_balances', balance.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final rows = await database.query('cash_items', orderBy: 'effect_date ASC, id ASC');
+    return rows.map(CashItem.fromMap).toList();
+  }
+
+  Future<List<CashItem>> getActiveForecastItems() async {
+    final database = await db;
+    final rows = await database.query(
+      'cash_items',
+      where: 'active = 1 AND include_in_forecast = 1',
+      orderBy: 'effect_date ASC, id ASC',
+    );
+    return rows.map(CashItem.fromMap).toList();
+  }
+
+  Future<void> upsertItem(CashItem item) async {
+    final database = await db;
+    final existing = await database.query('cash_items', where: 'stable_key = ?', whereArgs: [item.stableKey], limit: 1);
+    if (existing.isEmpty) {
+      await database.insert('cash_items', item.toMap());
+    } else {
+      final old = CashItem.fromMap(existing.first);
+      final merged = item.toMap()
+        ..['include_in_forecast'] = old.includeInForecast ? 1 : 0
+        ..['active'] = 1;
+      await database.update('cash_items', merged, where: 'stable_key = ?', whereArgs: [item.stableKey]);
+    }
+  }
+
+  Future<void> syncExcelItems(List<CashItem> newItems, String itemType) async {
+    final database = await db;
+    final keys = newItems.map((e) => e.stableKey).toSet();
+    for (final item in newItems) {
+      await upsertItem(item);
+    }
+    final current = await database.query('cash_items', where: 'item_type = ? AND source_type = ?', whereArgs: [itemType, 'excel']);
+    for (final row in current) {
+      final key = row['stable_key'] as String;
+      if (!keys.contains(key)) {
+        await database.update('cash_items', {'active': 0}, where: 'stable_key = ?', whereArgs: [key]);
+      }
+    }
+  }
+
+  Future<void> toggleInclude(CashItem item) async {
+    final database = await db;
+    await database.update('cash_items', {'include_in_forecast': item.includeInForecast ? 0 : 1}, where: 'id = ?', whereArgs: [item.id]);
+  }
+
+  Future<void> addManualItem(CashItem item) async => upsertItem(item);
+
+  Future<void> deactivateItem(CashItem item) async {
+    final database = await db;
+    await database.update('cash_items', {'active': 0}, where: 'id = ?', whereArgs: [item.id]);
+  }
+
+  Future<void> addBankBalance(BankBalance balance) async {
+    final database = await db;
+    await database.insert('bank_balances', balance.toMap());
   }
 
   Future<List<BankBalance>> getBankBalances() async {
     final database = await db;
-    final rows = await database.query('bank_balances', orderBy: 'bank_name');
+    final rows = await database.query('bank_balances', orderBy: 'id DESC');
     return rows.map(BankBalance.fromMap).toList();
   }
 
-  Future<double> totalBankBalance() async {
-    final database = await db;
-    final rows = await database.rawQuery('SELECT SUM(amount) AS total FROM bank_balances');
-    return ((rows.first['total'] ?? 0) as num).toDouble();
+  Future<int> totalBankBalance() async {
+    final balances = await getBankBalances();
+    final latestByBank = <String, BankBalance>{};
+    for (final b in balances) {
+      latestByBank.putIfAbsent(b.bankName, () => b);
+    }
+    return latestByBank.values.fold<int>(0, (sum, b) => sum + b.amount);
   }
-
-  Future<void> deleteBankBalance(int id) async {
-    final database = await db;
-    await database.delete('bank_balances', where: 'id=?', whereArgs: [id]);
-  }
-
-  Future<int> insertManualItem(FinancialItem item) async {
-    final database = await db;
-    return database.insert('financial_items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<ImportResult> syncExcelItems(List<FinancialItem> items, String kind) async {
-    final database = await db;
-    var inserted = 0;
-    var updated = 0;
-    var preserved = 0;
-    var removed = 0;
-    final nowKeys = items.map((e) => e.uniqueKey).toSet();
-
-    await database.transaction((txn) async {
-      final oldRows = await txn.query('financial_items', where: 'source_type=? AND kind=? AND is_active=1', whereArgs: ['excel', kind]);
-      final oldByKey = {for (final r in oldRows) r['unique_key'].toString(): FinancialItem.fromMap(r)};
-
-      for (final item in items) {
-        final old = oldByKey[item.uniqueKey];
-        if (old == null) {
-          await txn.insert('financial_items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-          inserted++;
-        } else {
-          final merged = item.copyWith(
-            id: old.id,
-            includeInForecast: old.includeInForecast,
-            isActive: 1,
-            createdAt: old.createdAt,
-          );
-          await txn.update('financial_items', merged.toMap(), where: 'unique_key=?', whereArgs: [item.uniqueKey]);
-          preserved++;
-        }
-      }
-
-      for (final old in oldByKey.values) {
-        if (!nowKeys.contains(old.uniqueKey)) {
-          await txn.update('financial_items', {'is_active': 0, 'updated_at': DateTime.now().toIso8601String()}, where: 'id=?', whereArgs: [old.id]);
-          removed++;
-        }
-      }
-    });
-    return ImportResult(inserted: inserted, updated: updated, preserved: preserved, removed: removed, total: items.length);
-  }
-
-  Future<List<FinancialItem>> getActiveItems({String? kind}) async {
-    final database = await db;
-    final rows = await database.query(
-      'financial_items',
-      where: kind == null ? 'is_active=1' : 'is_active=1 AND kind=?',
-      whereArgs: kind == null ? null : [kind],
-      orderBy: 'cash_effect_date ASC, amount ASC',
-    );
-    return rows.map(FinancialItem.fromMap).toList();
-  }
-
-  Future<List<FinancialItem>> getForecastItems() async {
-    final database = await db;
-    final rows = await database.query(
-      'financial_items',
-      where: 'is_active=1 AND include_in_forecast=1',
-      orderBy: 'cash_effect_date ASC, amount ASC',
-    );
-    return rows.map(FinancialItem.fromMap).toList();
-  }
-
-  Future<void> toggleForecast(int id, bool include) async {
-    final database = await db;
-    await database.update('financial_items', {'include_in_forecast': include ? 1 : 0, 'updated_at': DateTime.now().toIso8601String()}, where: 'id=?', whereArgs: [id]);
-  }
-
-  Future<void> deactivateItem(int id) async {
-    final database = await db;
-    await database.update('financial_items', {'is_active': 0, 'updated_at': DateTime.now().toIso8601String()}, where: 'id=?', whereArgs: [id]);
-  }
-}
-
-class ImportResult {
-  final int inserted;
-  final int updated;
-  final int preserved;
-  final int removed;
-  final int total;
-  const ImportResult({required this.inserted, required this.updated, required this.preserved, required this.removed, required this.total});
 }
