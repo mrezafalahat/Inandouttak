@@ -26,28 +26,6 @@ jobs:
       - name: Create Android files
         run: flutter create --platforms=android --project-name manabe_masaref .
 
-      - name: Patch Android and Kotlin
-        run: |
-          sed -i 's/version "1.7.10"/version "1.9.24"/g' android/settings.gradle || true
-          sed -i "s/version '1.7.10'/version '1.9.24'/g" android/settings.gradle || true
-          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle || true
-
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle || true
-
-
-          echo "===== SETTINGS.GRADLE ====="
-          cat android/settings.gradle
-
-          echo "===== APP BUILD.GRADLE ====="
-          cat android/app/build.gradle
-
-      - name: Verify Kotlin Version
-        run: |
-          echo "===== KOTLIN ====="
-          grep -R "org.jetbrains.kotlin.android" android || true
-          grep -R "1.9.24" android || true
-
       - name: Get dependencies
         run: flutter pub get
 
