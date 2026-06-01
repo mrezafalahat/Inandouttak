@@ -11,32 +11,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.24.0"
           channel: stable
 
-      - name: Create Android Project Files
+      - name: Create Android files
         run: flutter create --platforms=android --project-name manabe_masaref .
 
-      - name: Install Android SDK 35
+      - name: Fix Android SDK and Build Tools
         run: |
-          yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Patch Android SDK
-        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -n 1)
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle
+          sed -i '/android {/a\    buildToolsVersion = "35.0.0"' android/app/build.gradle
 
       - name: Get dependencies
         run: flutter pub get
