@@ -29,7 +29,7 @@ class _ManualItemScreenState extends State<ManualItemScreen> {
       cashEffectDate: date,
       documentNumber: 'MANUAL-${DateTime.now().millisecondsSinceEpoch}',
       description: descCtrl.text.trim(),
-      amount: amount,
+      amount: amount.toDouble(),
       kind: type,
       sourceType: 'manual',
       sourceName: 'ثبت دستی',

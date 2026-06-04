@@ -1,11 +1,12 @@
 import 'package:intl/intl.dart';
+import 'package:shamsi_date/shamsi_date.dart';
 
 final NumberFormat _moneyFormat = NumberFormat.decimalPattern('en_US');
 
-String formatMoney(int value) => _moneyFormat.format(value);
+String formatMoney(num value) => _moneyFormat.format(value.round());
 
 int parseMoney(String raw) {
-  var s = raw.trim();
+  var s = normalizePersianDigits(raw.trim());
   s = s.replaceAll(',', '').replaceAll('٬', '').replaceAll('،', '');
   s = s.replaceAll(RegExp(r'[^0-9\-]'), '');
   if (s.isEmpty || s == '-') return 0;
@@ -35,8 +36,37 @@ String normalizeDate(String raw) {
   return s;
 }
 
-String addDaysToJalaliText(String date, int days) {
-  // نسخه ساده برای پیش‌بینی اولیه: اگر تبدیل دقیق لازم شد بعداً تقویم کامل اضافه می‌کنیم.
-  // فعلاً اگر تاریخ قابل تبدیل نبود همان تاریخ را برمی‌گرداند.
-  return date;
+String addDaysToJalaliText(String date, int days) => AppFormatters.addJalaliDays(date, days);
+
+class AppFormatters {
+  static String money(num value) => formatMoney(value);
+  static int parseMoney(String raw) => parseMoneyTop(raw);
+  static String normalizeDate(String raw) => normalizeDateTop(raw);
+  static String normalizeDigits(String input) => normalizePersianDigits(input);
+  static String normalizeText(String input) => normalizePersianDigits(input.trim()).replaceAll(RegExp(r'\s+'), ' ');
+
+  static String todayJalali() {
+    final j = Jalali.now();
+    return '${j.year.toString().padLeft(4, '0')}/${j.month.toString().padLeft(2, '0')}/${j.day.toString().padLeft(2, '0')}';
+  }
+
+  static String addJalaliDays(String date, int days) {
+    final normalized = normalizeDate(date);
+    final parts = normalized.split('/');
+    if (parts.length < 3) return normalized;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return normalized;
+    try {
+      final g = Jalali(y, m, d).toGregorian().dateTime.add(Duration(days: days));
+      final j = Gregorian.fromDateTime(g).toJalali();
+      return '${j.year.toString().padLeft(4, '0')}/${j.month.toString().padLeft(2, '0')}/${j.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return normalized;
+    }
+  }
 }
+
+int parseMoneyTop(String raw) => parseMoney(raw);
+String normalizeDateTop(String raw) => normalizeDate(raw);

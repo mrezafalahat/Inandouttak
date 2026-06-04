@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/financial_item.dart';
+import '../models/bank_balance.dart';
 import '../services/database_service.dart';
 import '../utils/formatters.dart';
 
@@ -29,11 +29,10 @@ class _BalanceScreenState extends State<BalanceScreen> {
 
   Future<void> save() async {
     if (bankCtrl.text.trim().isEmpty) return;
-    await DatabaseService.instance.upsertBankBalance(BankBalance(
+    await DatabaseService.instance.addBankBalance(BankBalance(
       bankName: bankCtrl.text.trim(),
       amount: AppFormatters.parseMoney(amountCtrl.text),
-      balanceDate: AppFormatters.normalizeDate(dateCtrl.text),
-      updatedAt: DateTime.now().toIso8601String(),
+      date: AppFormatters.normalizeDate(dateCtrl.text),
     ));
     bankCtrl.clear();
     amountCtrl.clear();
@@ -42,7 +41,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final total = balances.fold<double>(0, (p, e) => p + e.amount);
+    final total = balances.fold<int>(0, (p, e) => p + e.amount);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -64,7 +63,7 @@ class _BalanceScreenState extends State<BalanceScreen> {
         ...balances.map((b) => Card(
               child: ListTile(
                 title: Text(b.bankName),
-                subtitle: Text('تاریخ موجودی: ${b.balanceDate}'),
+                subtitle: Text('تاریخ موجودی: ${b.date}'),
                 trailing: Text('${AppFormatters.money(b.amount)} ریال'),
               ),
             )),

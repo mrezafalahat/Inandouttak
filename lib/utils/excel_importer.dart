@@ -67,7 +67,7 @@ class ExcelImporter {
         cashEffectDate: effectDate,
         documentNumber: docNo.isEmpty ? 'row-${i + 1}' : docNo,
         description: desc.isEmpty ? sourceName : desc,
-        amount: amount,
+        amount: amount.toDouble(),
         kind: kind,
         sourceType: 'excel',
         sourceName: sourceName,
